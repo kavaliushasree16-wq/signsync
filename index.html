@@ -1,0 +1,187 @@
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Language Recognition</title>
+
+  <!-- ✅ TensorFlow.js and Teachable Machine Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+
+  <style>
+    * { margin: 0;
+       padding: 0;
+        box-sizing: border-box; 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+       }
+    body { 
+      background-color: #f5f7fa;
+       color: #333; 
+       line-height: 1.6;
+       }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    header { text-align: center; padding: 30px 0; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); color: white; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    h1 { font-size: 2.5rem; margin-bottom: 10px; }
+    .main-content { display: flex; flex-wrap: wrap; gap: 30px; margin-bottom: 40px; }
+    .camera-section, .output-section { flex: 1; min-width: 300px; background: white; border-radius: 10px; padding: 25px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+    .section-title { font-size: 1.5rem; margin-bottom: 20px; color: #2c3e50; padding-bottom: 10px; border-bottom: 2px solid #f0f0f0; }
+    .camera-container { position: relative; width: 100%; height: 300px; background: #e0e0e0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; display: flex; justify-content: center; align-items: center; color: #7f8c8d; border: 2px dashed #bdc3c7; }
+    #webcam { width: 100%; height: 100%; object-fit: cover; }
+    .camera-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.7); color: white; font-size: 1.2rem; text-align: center; padding: 20px; }
+    .controls { display: flex; justify-content: space-between; gap: 10px; margin-top: 20px; }
+    button { padding: 12px 20px; border: none; border-radius: 5px; background: #3498db; color: white; font-weight: bold; cursor: pointer; transition: all 0.3s ease; flex: 1; }
+    button:hover { background: #2980b9; transform: translateY(-2px); }
+    button:active { transform: translateY(1px); }
+    #stopBtn { background: #e74c3c; }
+    #stopBtn:hover { background: #c0392b; }
+    #simulateBtn { background: #2ecc71; }
+    #simulateBtn:hover { background: #27ae60; }
+    #outputText { width: 100%; height: 150px; background: #f8f9fa; border-radius: 8px; padding: 15px; font-size: 1.2rem; color: #2c3e50; border: 1px solid #e0e0e0; resize: none; margin-bottom: 20px; }
+    .word-bank { margin-top: 25px; }
+    .word-list { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .word-item { background: #3498db; color: white; padding: 10px 18px; border-radius: 30px; cursor: pointer; transition: all 0.3s ease; font-size: 0.9rem; }
+    .word-item:hover { background: #2980b9; transform: scale(1.05); }
+    .status-message { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #2c3e50; color: white; padding: 12px 25px; border-radius: 30px; z-index: 1000; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); display: none; }
+    @media (max-width: 768px) { .main-content { flex-direction: column; } h1 { font-size: 2rem; } .controls { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Sign Language Recognition</h1>
+      <p class="subtitle">Show basic sign language gestures to your webcam</p>
+    </header>
+
+    <div class="main-content">
+      <div class="camera-section">
+        <h2 class="section-title">Webcam Input</h2>
+        <div class="camera-container">
+          <video id="webcam" autoplay playsinline></video>
+          <div class="camera-overlay" id="cameraOverlay">
+            <p>Camera is not active</p>
+            <p>Click "Start Camera" to begin</p>
+          </div>
+        </div>
+        <div class="controls">
+          <button id="startBtn">Start Camera</button>
+          <button id="stopBtn" disabled>Stop Camera</button>
+          <button id="simulateBtn">Recognize Sign</button>
+        </div>
+      </div>
+
+      <div class="output-section">
+        <h2 class="section-title">Recognized Text</h2>
+        <textarea id="outputText" readonly placeholder="Recognized text will appear here..."></textarea>
+        <div class="word-bank">
+            
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-message" id="statusMessage"></div>
+
+  <script>
+  // === MODEL CONFIG: paste your Teachable Machine URLs here ===
+  const MODEL_URL = "model.json";
+  const METADATA_URL = "metadata.json";
+  // =============================================================
+
+  const webcam = document.getElementById('webcam');
+  const cameraOverlay = document.getElementById('cameraOverlay');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const simulateBtn = document.getElementById('simulateBtn');
+  const outputText = document.getElementById('outputText');
+  const wordItems = document.querySelectorAll('.word-item');
+  const statusMessage = document.getElementById('statusMessage');
+
+  let stream = null;
+  let model, maxPredictions;
+
+  // Load Teachable Machine model 
+  async function loadModel() {
+    try {
+      showMessage("Loading model...");
+      model = await tmImage.load(MODEL_URL, METADATA_URL);
+      maxPredictions = model.getTotalClasses();
+      showMessage("Model loaded successfully!");
+    } catch (error) {
+      console.error("Model load error:", error);
+      showMessage("Failed to load model. Check URLs.");
+    }
+  }
+
+  // Start webcam
+  startBtn.addEventListener('click', async () => {
+    try {
+      if (!model) await loadModel();
+
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      webcam.srcObject = stream;
+      cameraOverlay.style.display = 'none';
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      showMessage("Camera started! Show a sign to predict.");
+    } catch (err) {
+      console.error('Error accessing webcam:', err);
+      cameraOverlay.innerHTML = '<p>Error accessing camera</p><p>Please check permissions and try again</p>';
+      cameraOverlay.style.display = 'flex';
+    }
+  });
+
+  // Stop webcam
+  stopBtn.addEventListener('click', () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      webcam.srcObject = null;
+      cameraOverlay.innerHTML = '<p>Camera stopped</p><p>Click "Start Camera" to begin again</p>';
+      cameraOverlay.style.display = 'flex';
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+  });
+
+  // Predict using the model (fast + accurate)
+  simulateBtn.addEventListener('click', async () => {
+    if (!model) { showMessage("Load the model first!"); return; }
+    if (!stream) { showMessage("Start the camera first!"); return; }
+
+    showMessage("Recognizing sign...");
+    cameraOverlay.innerHTML = '<p>Processing sign...</p><p>Keep your hand steady.</p>';
+    cameraOverlay.style.display = 'flex';
+
+    const flip = true; // 👈 mirror the webcam to match training
+    const predictions = await model.predict(webcam, flip);
+
+    // Pick the highest probability class
+    const best = predictions.reduce((a, b) => (a.probability > b.probability ? a : b));
+    const label = best.className;
+
+    cameraOverlay.style.display = 'none';
+    showMessage('Recognized: "${label}"');
+
+    outputText.value = outputText.value ? outputText.value + ' ' + label : label;
+  });
+
+  // Add word when clicking on word items
+  wordItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const word = item.getAttribute('data-word');
+      outputText.value = outputText.value ? outputText.value + ' ' + word : word;
+      item.style.background = '#2980b9';
+      setTimeout(() => item.style.background = '#3498db', 300);
+      showMessage('Added "${word}"');
+    });
+  });
+
+  // Status message popup
+  function showMessage(message) {
+    statusMessage.textContent = message;
+    statusMessage.style.display = 'block';
+    setTimeout(() => statusMessage.style.display = 'none', 3000);
+  }
+</script>
+</body>
+</html>
