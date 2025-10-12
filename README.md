@@ -33,4 +33,4 @@ Follow these steps to set up and run the project locally:
 
 ### 1️⃣ Clone this Repository
 ```bash
-git clone https://github.com/Ushasree/sign-language-recognition.git
+git clone https://github.com/kavaliushasree16-wq/signsync.git
