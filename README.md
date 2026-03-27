@@ -27,6 +27,9 @@ A simple **web-based Sign Language Recognition** app that uses **TensorFlow.js**
 
 ---
 
+## 🚀 Live Demo
+[Click here to view the project](https://signsyncc.netlify.app)
+
 ## 🧑‍💻 Setup & Installation
 
 Follow these steps to set up and run the project locally:
