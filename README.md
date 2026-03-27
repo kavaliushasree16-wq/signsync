@@ -1,8 +1,7 @@
 # 🧠 Sign Language Recognition using Teachable Machine & TensorFlow.js
 
 A simple **web-based Sign Language Recognition** app that uses **TensorFlow.js** and **Teachable Machine** to detect and recognize hand gestures through your **webcam** in real time.
-
-![Sign Language Recognition Screenshot](./screenshot.png)
+ 
 
 ---
 
